@@ -231,8 +231,7 @@ def main(**extra_args):
           # above, but distutils is surely the worst piece of code in all of
           # python -- duplicating things into MANIFEST.in but this is admittedly
           # only a workaround to get things started -- not a solution
-          package_data={'dipy':
-                            [pjoin('data', 'files', '*')]},
+          package_data={'dipy': [pjoin('data', 'files', '*')]},
           data_files=[('share/doc/dipy/examples',
                        glob(pjoin('doc', 'examples', '*.py')))],
           scripts=glob(pjoin('bin', 'dipy_*')),
