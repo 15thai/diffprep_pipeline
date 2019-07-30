@@ -102,7 +102,6 @@ for modulename, other_sources, language in (
         ('dipy.align.bundlemin', [], 'c'),
         ('dipy.align.transforms', [], 'c'),
         ('dipy.align.parzenhist', [], 'c'),
-        #('dipy.align.quadratictransform', [], 'c'),
         ('dipy.utils.omp', [], 'c'),
         ('dipy.utils.fast_numpy', [], 'c')):
     pyx_src = pjoin(*modulename.split('.')) + '.pyx'
@@ -233,8 +232,7 @@ def main(**extra_args):
           # python -- duplicating things into MANIFEST.in but this is admittedly
           # only a workaround to get things started -- not a solution
           package_data={'dipy':
-                            [pjoin('data', 'files', '*')
-                             ]},
+                            [pjoin('data', 'files', '*')]},
           data_files=[('share/doc/dipy/examples',
                        glob(pjoin('doc', 'examples', '*.py')))],
           scripts=glob(pjoin('bin', 'dipy_*')),
