@@ -2,7 +2,6 @@
 ================================
 PCA Based Local Noise Estimation
 ================================
-
 """
 
 import numpy as np
