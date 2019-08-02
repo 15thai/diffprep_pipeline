@@ -5,7 +5,7 @@ from dipy.denoise.GibbRemoval import gibbremoval
 from dipy.denoise.ChangeFOV import changeFoV
 from dipy.align.reslice import reslice
 from dipy.denoise.fsl_bet import fsl_bet_mask
-from dipy.align.Register_DWIs import register_dwi_to_b0, set_image_in_scale, get_gradients_params, get_direction_and_spacings
+from dipy.align.Register_DWIs import set_image_in_scale, get_gradients_params, get_direction_and_spacings
 
 from dipy.align.ImageQuadraticMap import QuadraticMap, QuadraticRegistration, transform_centers_of_mass
 
@@ -15,16 +15,13 @@ from dipy.align.ImageQuadraticMap import QuadraticMap, QuadraticRegistration, tr
 
 class diffprep(object):
     def __init__(self, input_image_path,
-                 phase_encoding='vertical',
-                 b0_id=0,
-                 output_image_path=None,
-                 mask_image_path=None,
-
-                 bvals=None,
-                 bvecs=None,
-                 Eddy=False,
-                 fov=None,
-
+                 encoding_phase,
+                 output_image_path = None,
+                 mask_image_path = None,
+                 bvals = None,
+                 bvecs = None,
+                 Eddy = False,
+                 fov = None,
                  activeGibbRemoving = False,
                  activeDenoising = False,
                  center_of_mass = False,
@@ -32,15 +29,14 @@ class diffprep(object):
 
         # Inter from 0-5, "Nearest", "Lanczos", "Bilinear", "Bicubic", "Cubic"
         self.input_image_fn = input_image_path
-        self.mask_image_path = mask_image_path
-        self.phase_encoding = phase_encoding
+        self.encoding_phase = encoding_phase
         if output_image_path is None:
             output_image_path = input_image_path.split('.')[0] + "_DIFFPREP_proc.nii"
 
         self.output_image_fn = output_image_path
         self.bvals = bvals          # Temporary - not Used
         self.bvecs = bvecs          # Temporary - not Used
-        self.b0_id = b0_id
+
 
         if fov:
             if len(fov) >3 :
@@ -68,10 +64,8 @@ class diffprep(object):
 
         self.output_data = self.input_data
         self.interp = interp
+        self.b0_id = 0
         self.b0 = self.input_data[:,:,:,self.b0_id]
-
-
-
 
         if new_resolution is not None:
             try:
@@ -79,45 +73,42 @@ class diffprep(object):
 
             except:
                 print("Can't Convert to Numpy Array for resolution")
-        if self.mask_image_path is not None:
+        if mask_image_path is not None:
             self.mask_image_path = mask_image_path
             self.mask_image = nib.load(mask_image_path)
             self.mask_data = self.mask_image.get_data()
-        else:
-            self.create_mask()
-            self.mask_affine, self.mask_data = self.get_affine_image_data(self.mask_image_path)
+
 
 #------------DIFFPREP - run all----------------------------#
     def execute(self):
         # Do QC
         self.output_affine = self.input_affine.copy()
-        self.current_process_data = self.input_data.copy()
         # Change FOV
         if self.fov is not None:
             print("----------Changing field of view ----------------")
             output_arr, output_affine = self.change_field_of_view(self.input_image, self.fov, self.center_of_mass)
-            self.current_process_data = output_arr
+            self.input_data = output_arr
             self.output_affine = output_affine
 
         # Denoising
         if self.activeDenoising:
             print("----------Denoising the DWIs ----------------")
             output_arr, output_noise_arr, sigma_arr = self.get_Denoising_data(self.input_data)
-            self.current_process_data = output_arr
+            self.input_data = output_arr
 
         # Gibb Removing
         if self.activeGibbRemoving:
             print("----------Gibb Removal ----------------------")
             output_arr = self.get_GibbRemoved_data(self.input_data)
-            self.current_process_data = output_arr
+            self.input_data = output_arr
 
-        # Upsampling
-        if self.new_resolution is not None:
-            print("---------- Upsampling data-------------------")
+     #   # Upsampling
+     #   if self.new_resolution is not None:
+     #       print("----------Upsampling data-------------------")
 
-            if self.new_resolution != self.input_resolution:
-                output_arr = self.upsampling_data(self.input_data, self.input_affine, self.input_resolution, self.new_resolution, self.interp)
-                self.current_process_data = output_arr
+            #if self.new_resolution != self.input_resolution:
+           #     output_arr = self.upsampling_data(self.input_data, self.input_affine, self.input_resolution, self.new_resolution, self.interp)
+          #      self.input_data = output_arr
 
         # Creating Mask
         if self.mask_image_path is None:
@@ -126,6 +117,8 @@ class diffprep(object):
 
         if self.Eddy:
             print("Perform Registration......")
+
+            b0_img_target= self.dmc_make_target(self.b0,self.mask_data)
 
         self.output_data = self.input_data
         self.save_output_tofile(self.output_data,self.output_affine,self.input_image_fn.split('.nii')[0] + "_DIFFPREP_proc.nii"  )
@@ -193,8 +186,6 @@ class diffprep(object):
     def create_mask(self, b0_image_fn= None, mask_fn = None, mask = True):
         if b0_image_fn:
             self.b0_image_fn = b0_image_fn
-        else:
-            self.get_b0_image()
 
         if mask_fn is None:
             mask_fn = self.input_image_fn.split('.')[0] + '_mask.nii'
@@ -212,11 +203,10 @@ class diffprep(object):
         return mask_data, mask_mask_data,  mask_affine
 
 
-    # TODO: dmc_make_target !!!!!! T_T
     def dmc_make_target(self, b0_image, b0_image_mask):
         # Import b0_image_data, and b0_image_mask produced by fsl_bet
         fct = 0.9
-        new_resolution = self.input_resolution * fct
+        new_resolution = self.input_resolution / fct
         transformed_b0, transformed_affine_b0 = self.upsampling_data(b0_image, self.input_affine, self.input_resolution, new_resolution)
         transformed_mask, transformed_affine_mask = self.upsampling_data(b0_image_mask,self.input_affine, self.input_resolution, self.new_resolution)
 
@@ -227,14 +217,29 @@ class diffprep(object):
         minz = transformed_mask.shape[2] + 5
         maxz = -1
 
-        transformed_mask[(transformed_mask < 0.5)] = 0
+        transformed_mask[(transformed_mask<0.5)]=0
         transformed_mask[(transformed_mask >= 0.5)] = 1
-        x, y, z = np.where(transformed_mask == 1)
-        [minx, miny, minz] = min(x, y, z)
-        [maxx, maxy, maxz] = max(x, y, z)
+        x,y,z = np.where(transformed_mask==1)
+        [minx, miny, minz] = min(x,y,z)
+        [maxx, maxy, maxz] = max(x,y,z)
 
-        print(minx, miny, minz)
-        print(maxx, maxy, maxz)
+
+        #
+        # # Not iterate like this -- Make it shorter ! Should I?
+        # for i in range(transformed_mask.shape[2]):
+        #     for j in range(transformed_mask.shape[1]):
+        #         for k in range(transformed_mask.shape[0]):
+        #             if transformed_mask[i,j,k] > 0.5:
+        #
+        #                 minx = min(i, minx)
+        #                 miny = min(j, miny)
+        #                 minz = min(k, minz)
+        #
+        #                 maxx = max(i, maxx)
+        #                 maxy = max(j, maxy)
+        #                 maxz = max(k, maxz)
+        #
+        # print(minx, miny, minz)
 
         if minx == transformed_mask.shape[0] + 5:
             minx = 0
@@ -250,24 +255,24 @@ class diffprep(object):
         minz = max(minz-2, 0)
         maxz = min(maxz + 2, transformed_mask.shape[2] - 1)
 
-        start = np.array([minx, miny, minz])
-        sz = np.array([maxx - minx + 1, maxy - miny + 1, maxz - minz + 1])
+        if (maxx-minx+1) +(maxy-miny+1) + (maxz-minz+1) < 0.3*np.sum(transformed_mask.shape):
+            minx=0
+            maxx=transformed_mask.shape[0]-1
+            miny = 0
+            maxy = transformed_mask.shape[1] - 1
+            minz = 0
+            maxz = transformed_mask.shape[2] - 1
 
-        if np.sum(sz) < 0.3*np.sum(transformed_mask.shape):
-            start = np.zeros(3)
-            sz = transformed_mask.shape
-
-        final_image = transformed_b0[start[0]: start[0] + sz[0],
-                      start[1]: start[1] + sz[1],
-                      start[2]: start[2] + sz[2]]
+        new_transformed_mask = transformed_mask[minx:maxx+1,miny:maxy+1,minz:maxz+1]
+        final_image =transformed_b0[minx:maxx + 1, miny:maxy + 1, minz:maxz + 1]
 
         msk_cnt = len(b0_image_mask[b0_image_mask != 0])
         npixel = b0_image_mask.size
 
         # Set the equal to 1 - Keep the orginal image
-        if msk_cnt < 0.02*npixel:
-            b0_image_mask = 1
-            final_image = b0_image_mask * transformed_b0
+        if msk_cnt < 0.02 * npixel:
+            b0_image_mask[:] = 1
+            final_image = b0_image_mask
         return final_image
 
 
@@ -305,24 +310,31 @@ class diffprep(object):
         signal_ranges = self.choose_range(b0_target, curr_vol, b0_target_bin)
         signal_ranges[2:3] = 0
         if not correction_mode:
-            id_trans = QuadraticMap(self.phase_encoding)
+            id_trans = QuadraticMap(self.encoding_phase)
             # id_trans.Setting_Identity()
             curr_trans = id_trans.get_QuadraticParams()
 
         else:
-            curr_trans = self.RegisterDWI_to_B0(b0_target, curr_vol,self.phase_encoding, signal_ranges, optimizer_setting = True)
+            curr_trans = self.RegisterDWI_to_B0(b0_target, curr_vol,self.encoding_phase, signal_ranges, optimizer_setting = True)
         return curr_trans
 
 
-    # TODO: EDDY CURRENT DISTORTION
-    def EDDY_Current_Distortion(self, b0_target):
+    def EDDY_Current_Distortion(self, b0_target, b0_target_bin, num_threads = None):
         import multiprocessing, ctypes, time
         from functools import partial
 
+        if num_threads is not None:
+            threads_to_use = num_threads
+        else:
+            threads_to_use = multiprocessing.cpu_count()
         parse_function = partial(self.multi_sub_,
                                  target_vol = b0_target,
+                                 b0_target_bin = b0_target_bin,
                                  correction_mode = False)
 
+        with multiprocessing.Pool(threads_to_use) as p:
+            transform_vols = p.map(parse_function, [self.input_data[...,i] for i in range(self.nVols)])
+        return transform_vols
 
 
     def RegisterDWI_to_B0(self, target_vol, curr_vol,
@@ -448,5 +460,6 @@ class diffprep(object):
 
         # return finalTransform, final_image
         return finalTransform.get_QuadraticParams()
+
 
 

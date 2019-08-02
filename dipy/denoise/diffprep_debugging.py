@@ -5,9 +5,9 @@ import DIFFPREPClass as difp
 
 
 
-input_fn = "/home/anhpeo/Desktop/dipy_data_test/register_test/test_diffprep_work/AP_b2500_for_test.nii"
+input_fn = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test_subj1_anh/subj1_raw/subj1.nii"
 
-d = difp.diffprep(input_fn, encoding_phase= 'vertical')
+d = difp.diffprep(input_fn, phase_encoding= 'vertical')
 d.create_mask()
 image = d.input_data
 

@@ -1,6 +1,5 @@
-import sys
+import sys, os
 import nibabel as nib
-import os
 from scipy.ndimage import center_of_mass
 from dipy.align.imwarp import get_direction_and_spacings
 import numpy as np
