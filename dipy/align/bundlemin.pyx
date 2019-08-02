@@ -37,8 +37,8 @@ cdef double min_direct_flip_dist(double *a,double *b,
     out : double
         mininum of direct and flipped average distances
 
-    References
-    -----------
+    Reference
+    ---------
     .. [Garyfallidis12] Garyfallidis E. et al., QuickBundles a method for
                         tractography simplification, Frontiers in Neuroscience,
                         vol 6, no 175, 2012.
@@ -377,9 +377,7 @@ def distance_matrix_mdf(streamlines_a, streamlines_b):
         tracksB64[i] = np.ascontiguousarray(streamlines_b[i], dtype=f64_dt)
     # preallocate buffer array for track distance calculations
     cdef:
-        cnp.float64_t *t1_ptr
-        cnp.float64_t *t2_ptr
-        cnp.float64_t *min_buffer
+        cnp.float64_t *t1_ptr, *t2_ptr, *min_buffer
     # cycle over tracks
     cdef:
         cnp.ndarray [cnp.float64_t, ndim=2] t1, t2

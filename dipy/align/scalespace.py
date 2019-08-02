@@ -313,7 +313,7 @@ class IsotropicScaleSpace(ScaleSpace):
     def __init__(self, image, factors, sigmas,
                  image_grid2world=None,
                  input_spacing=None,
-                 mask0=False):
+                 mask0=False, norm = False):
         r""" IsotropicScaleSpace
 
         Computes the Scale Space representation of an image using isotropic
@@ -354,8 +354,10 @@ class IsotropicScaleSpace(ScaleSpace):
             mask = np.asarray(image > 0, dtype=np.int32)
 
         # Normalize input image to [0,1]
-        img = ((image.astype(np.float64) - image.min()) /
-               (image.max() - image.min()))
+        img = image
+        if norm:
+            img = ((image.astype(np.float64) - image.min()) /
+                   (image.max() - image.min()))
         if mask0:
             img *= mask
 
