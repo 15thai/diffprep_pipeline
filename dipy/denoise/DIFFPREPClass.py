@@ -1,5 +1,6 @@
 import numpy as np
 import nibabel as nib
+import os
 from dipy.denoise.randomlpca_denoise import randomlpca_denoise
 from dipy.denoise.GibbRemoval import gibbremoval
 from dipy.denoise.ChangeFOV import changeFoV
@@ -32,7 +33,7 @@ class diffprep(object):
 
         # Inter from 0-5, "Nearest", "Lanczos", "Bilinear", "Bicubic", "Cubic"
         self.input_image_fn = input_image_path
-        self.mask_image_path = mask_image_path
+        self.mask_image_fn = mask_image_path
         self.phase_encoding = phase_encoding
         if output_image_path is None:
             output_image_path = input_image_path.split('.')[0] + "_DIFFPREP_proc.nii"
@@ -42,12 +43,6 @@ class diffprep(object):
         self.bvecs = bvecs          # Temporary - not Used
         self.b0_id = b0_id
 
-        if fov:
-            if len(fov) >3 :
-                print("ERROR, too many size")
-            fov = np.array(fov)
-            self.fov = fov
-
         self.input_image = nib.load(input_image_path)
         self.input_data = self.input_image.get_data()
         self.input_affine = self.input_image.affine
@@ -56,6 +51,13 @@ class diffprep(object):
         self.input_size = self.input_data.size
         self.input_shape = self.input_data.shape
 
+        if fov:
+            if len(fov) >3 :
+                print("ERROR, too many size")
+            fov = np.array(fov)
+            self.fov = fov
+        else:
+            self.fov = self.input_resolution*self.input_shape
         # Activate Set-up
         self.activeGibbRemoving = activeGibbRemoving
         self.activeDenoising = activeDenoising
@@ -69,29 +71,36 @@ class diffprep(object):
         self.output_data = self.input_data
         self.interp = interp
         self.b0 = self.input_data[:,:,:,self.b0_id]
-
-
-
-
+        self.new_resolution = new_resolution
         if new_resolution is not None:
             try:
                 self.new_resolution = np.array(new_resolution)
 
             except:
                 print("Can't Convert to Numpy Array for resolution")
-        if self.mask_image_path is not None:
-            self.mask_image_path = mask_image_path
+
+        if self.mask_image_fn is not None:
+            self.mask_image_fn = mask_image_path
             self.mask_image = nib.load(mask_image_path)
             self.mask_data = self.mask_image.get_data()
+            mask_mask_fn1 = self.mask_image_fn.split('.nii')[0] + '_mask.nii'
+            mask_mask_fn2 = self.mask_image_fn.split('.nii')[0] + '_mask.nii.gz'
+
+            if os.path.exists(mask_mask_fn1):
+                self.mask_mask_data = (nib.load(mask_mask_fn1)).get_data()
+            elif os.path.exists(mask_mask_fn2):
+                self.mask_mask_data = (nib.load(mask_mask_fn2)).get_data()
+            else:
+                print("Mask_data_not_exist")
         else:
-            self.create_mask()
-            self.mask_affine, self.mask_data = self.get_affine_image_data(self.mask_image_path)
+            self.mask_data, self.mask_mask_data, self.mask_affine = self.create_mask()
 
 #------------DIFFPREP - run all----------------------------#
     def execute(self):
         # Do QC
         self.output_affine = self.input_affine.copy()
         self.current_process_data = self.input_data.copy()
+
         # Change FOV
         if self.fov is not None:
             print("----------Changing field of view ----------------")
@@ -120,11 +129,12 @@ class diffprep(object):
                 self.current_process_data = output_arr
 
         # Creating Mask
-        if self.mask_image_path is None:
-            self.create_mask()
-            self.mask_affine, self.mask_data = self.get_affine_image_data(self.mask_image_path)
+        if self.mask_image_fn is None:
+            self.mask_data, self.mask_mask_data, self.mask_affine = self.create_mask()
+            # self.mask_affine, self.mask_data = self.get_affine_image_data(self.mask_image_path)
 
         if self.Eddy:
+            final_image = self.dmc_make_target(self.b0, self.mask_mask_data)
             print("Perform Registration......")
 
         self.output_data = self.input_data
@@ -161,7 +171,9 @@ class diffprep(object):
     def get_Denoising_data(self, input_arr, save_to_file = False):
         output, output_noise, sigma = randomlpca_denoise(input_arr)
         self.output_sigma_noise = sigma
-        self.save_output_tofile(output_noise, self.output_image_fn.split('.nii')[0] + "_noise.nii")
+        if save_to_file:
+            self.save_output_tofile(output_noise,
+                                    output_name=self.output_image_fn.split('.nii')[0] + "_noise.nii")
         return output, output_noise, sigma
 
 
@@ -199,6 +211,7 @@ class diffprep(object):
         if mask_fn is None:
             mask_fn = self.input_image_fn.split('.')[0] + '_mask.nii'
         fsl_bet_mask(self.b0_image_fn, mask_fn, mask)
+
         self.mask_image_fn = mask_fn
         self.mask_mask_fn = mask_fn.split('.nii')[0] + '_mask.nii'
         # get_mask_info
@@ -212,27 +225,30 @@ class diffprep(object):
         return mask_data, mask_mask_data,  mask_affine
 
 
-    # TODO: dmc_make_target !!!!!! T_T
-    def dmc_make_target(self, b0_image, b0_image_mask):
+
+    def dmc_make_target(self, b0_image, b0_bi_mask):
         # Import b0_image_data, and b0_image_mask produced by fsl_bet
         fct = 0.9
-        new_resolution = self.input_resolution * fct
-        transformed_b0, transformed_affine_b0 = self.upsampling_data(b0_image, self.input_affine, self.input_resolution, new_resolution)
-        transformed_mask, transformed_affine_mask = self.upsampling_data(b0_image_mask,self.input_affine, self.input_resolution, self.new_resolution)
-
-        minx = transformed_mask.shape[0] + 5
-        maxx = -1
-        miny = transformed_mask.shape[1] + 5
-        maxy = -1
-        minz = transformed_mask.shape[2] + 5
-        maxz = -1
+        new_resolution = self.input_resolution / fct
+        transformed_b0, transformed_affine_b0 = self.upsampling_data(b0_image,
+                                                                     self.input_affine,
+                                                                     self.input_resolution,
+                                                                     new_resolution)
+        transformed_mask, transformed_affine_mask = self.upsampling_data(b0_bi_mask,
+                                                                         self.input_affine,
+                                                                         self.input_resolution,
+                                                                         new_resolution)
 
         transformed_mask[(transformed_mask < 0.5)] = 0
         transformed_mask[(transformed_mask >= 0.5)] = 1
         x, y, z = np.where(transformed_mask == 1)
-        [minx, miny, minz] = min(x, y, z)
-        [maxx, maxy, maxz] = max(x, y, z)
+        minx = min(x)
+        miny = min(y)
+        minz = min(z)
 
+        maxx = max(x)
+        maxy = max(y)
+        maxz = max(z)
         print(minx, miny, minz)
         print(maxx, maxy, maxz)
 
@@ -242,6 +258,12 @@ class diffprep(object):
             miny = 0
         if minz == transformed_mask.shape[2] + 5:
             minz = 0
+        if maxx ==  -1:
+            maxx = transformed_mask.shape[0] -1
+        if maxy == -1:
+            maxy = transformed_mask.shape[1] -1
+        if maxz == -1:
+            maxz = transformed_mask.shape[2] -1
 
         minx = max(minx-2, 0)
         maxx = min(maxx + 2, transformed_mask.shape[0] - 1)
@@ -448,5 +470,7 @@ class diffprep(object):
 
         # return finalTransform, final_image
         return finalTransform.get_QuadraticParams()
+
+
 
 
