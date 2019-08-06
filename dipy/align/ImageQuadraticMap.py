@@ -22,9 +22,13 @@ class QuadraticInvalidValuesError(Exception):
 ####################################################
 class QuadraticMap (object):
 
-    def __init__(self, phase, QuadraticParams = None,
-                 domain_grid_shape = None, domain_grid2world = None,
-                 codomain_grid_shape = None, codomain_grid2world = None, registration_type = None):
+    def __init__(self, phase,
+                 QuadraticParams = None,
+                 domain_grid_shape = None,
+                 domain_grid2world = None,
+                 codomain_grid_shape = None,
+                 codomain_grid2world = None,
+                 registration_type = None):
 
         # Return self.phase and self.phase_id
         self.set_Phase(phase)
@@ -116,8 +120,13 @@ class QuadraticMap (object):
     def get_QuadraticParams(self):
         return self.QuadraticParams.copy()
 
-    def transform(self, image, QuadraticParams = None,
-                  image_grid2world = None, sampling_grid_shape = None, sampling_grid2world = None, interpolation_method = 'quadratic'):
+    def transform(self, image,
+                  QuadraticParams = None,
+                  image_grid2world = None,
+                  sampling_grid_shape = None,
+                  sampling_grid2world = None,
+                  interpolation_method = 'quadratic'):
+
         if sampling_grid_shape is None:
             sampling_grid_shape = self.domain_shape
         dim = len(sampling_grid_shape)
@@ -138,12 +147,19 @@ class QuadraticMap (object):
         else:
             quad = QuadraticParams
 
-        image_transformed = quadratic_transform(image, shape, quad, self.Matrix, sampling_grid2world,
-                                               image_grid2world, self.phase_id, self.do_cubic, interpolation_method)
+        image_transformed = quadratic_transform(image, shape,
+                                                quad, self.Matrix,
+                                                sampling_grid2world,
+                                                image_grid2world,
+                                                self.phase_id,
+                                                self.do_cubic,
+                                                interpolation_method)
         return np.array(image_transformed)
 
 class MutualInformationMetric(object):
-    def __init__(self, phase, nbins = 100, starting_QuadraticParams = None):
+    def __init__(self, phase,
+                 nbins = 100,
+                 starting_QuadraticParams = None):
         self.phase = phase
         self.histogram = ParzenJointHistogram(nbins)
         self.metric_val = None
@@ -152,8 +168,11 @@ class MutualInformationMetric(object):
         self.starting_QuadraticParams = starting_QuadraticParams
         self.QuadraticMap_ = QuadraticMap(phase)
 
-    def setup(self, transform, static, moving, static_grid2world=None,
-              moving_grid2world=None, starting_QuadraticParams=None):
+    def setup(self, transform,
+              static, moving,
+              static_grid2world=None,
+              moving_grid2world=None,
+              starting_QuadraticParams=None):
 
         self.dim = len(static.shape)
         if moving_grid2world is None:
@@ -172,9 +191,12 @@ class MutualInformationMetric(object):
         self.moving_direction, self.moving_spacing = \
             get_direction_and_spacings(moving_grid2world, self.dim)
 
-        self.QuadraticMap_ = QuadraticMap(self.phase, QuadraticParams= starting_QuadraticParams,
-                                         domain_grid_shape=  static.shape, domain_grid2world= static_grid2world,
-                                         codomain_grid_shape= moving.shape, codomain_grid2world= moving_grid2world)
+        self.QuadraticMap_ = QuadraticMap(self.phase,
+                                          QuadraticParams= starting_QuadraticParams,
+                                         domain_grid_shape=  static.shape,
+                                          domain_grid2world= static_grid2world,
+                                         codomain_grid_shape= moving.shape,
+                                          codomain_grid2world= moving_grid2world)
         self.histogram.setup(self.static, self.moving)
 
     def _update_histogram(self):
@@ -190,7 +212,11 @@ class MutualInformationMetric(object):
         H = self.histogram  # Shortcut to `self.histogram`
         grad = None
         # Call the cythonized MI computation with self.histogram fields
-        self.metric_val = compute_parzen_mi(H.joint, H.joint_grad, H.smarginal, H.mmarginal, grad)
+        self.metric_val = compute_parzen_mi(H.joint,
+                                            H.joint_grad,
+                                            H.smarginal,
+                                            H.mmarginal,
+                                            grad)
 
     def distance(self, QuadraticParams):
         try:
@@ -221,7 +247,8 @@ class QuadraticRegistration(object):
         self.grad_params = gradients_params
         self.metric = metric
         if metric is None:
-            self.metric = MutualInformationMetric(phase = self.phase, starting_QuadraticParams = initial_QuadraticParams)
+            self.metric = MutualInformationMetric(phase = self.phase,
+                                                  starting_QuadraticParams = initial_QuadraticParams)
 
         if levels is None:
             levels = 3
@@ -260,8 +287,10 @@ class QuadraticRegistration(object):
     def set_optimizationflags (self, new_optimizationflags):
         self.optimization_flags = new_optimizationflags
 
-    def optimize(self, static, moving, phase=None,
-                 static_grid2world=None, moving_grid2world=None,
+    def optimize(self, static, moving,
+                 phase=None,
+                 static_grid2world=None,
+                 moving_grid2world=None,
                  grad_params=None):
 
         if grad_params is not None:
@@ -328,8 +357,12 @@ class QuadraticRegistration(object):
                               current_static_grid2world,
                               current_moving_grid2world)
 
-            opt = DIFFPREPOptimizer(self.metric, Quadratic_map.get_QuadraticParams(),
-                                                            self.optimization_flags, self.grad_params)
+            # def __init__(self, similarity_metric, x0, opt_flags, grad_params=None):
+
+            opt = DIFFPREPOptimizer(self.metric,
+                                    Quadratic_map.get_QuadraticParams(),
+                                    self.optimization_flags,
+                                    self.grad_params)
             params = opt.xopt
             self.current_level_cost = opt.CurrentCost
 

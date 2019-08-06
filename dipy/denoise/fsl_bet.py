@@ -3,13 +3,14 @@ import os
 import nibabel
 import sys
 
-print(fsl.Info().version())
-print(os.getenv('PATH'))
-print(os.getenv('FSLDIR'))
-print(os.environ)
+# Checking if environmental variable is correct
+# print(fsl.Info().version())
+# print(os.getenv('PATH'))
+# print(os.getenv('FSLDIR'))
+# print(os.environ)
 os.environ['PATH'] += os.pathsep + '/usr/local/fsl/bin'
 fsl.FSLCommand.set_default_output_type('NIFTI')
-print(os.getenv('PATH'))
+# print(os.getenv('PATH'))
 
 def fsl_bet_mask(input_image_fn, output_image_fn = None, binary_mask = True):
     myb = fsl.BET()
@@ -24,13 +25,13 @@ def fsl_bet_mask(input_image_fn, output_image_fn = None, binary_mask = True):
     myb.run()
 
     return output_image_fn
-
-if __name__ == "__main__":
-    input_image = sys.argv[1]
-    if len(sys.argv) <3:
-        output_image = input_image.split('.nii')[0] + "fsl_bet.nii"
-    else:
-        output_image = sys.argv[2]
-    binary_mask = sys.argv[3]
-
-    fsl_bet_mask(input_image, output_image, binary_mask )
+#
+# if __name__ == "__main__":
+#     input_image = sys.argv[1]
+#     if len(sys.argv) <3:
+#         output_image = input_image.split('.nii')[0] + "fsl_bet.nii"
+#     else:
+#         output_image = sys.argv[2]
+#     binary_mask = sys.argv[3]
+#
+#     fsl_bet_mask(input_image, output_image, binary_mask )

@@ -1,5 +1,5 @@
+# Authors: Okan, Anh Thai
 import numpy as np
-
 _NQUADPARAMS = 21
 
 class  DIFFPREPOptimizer(object):
@@ -211,14 +211,11 @@ class  DIFFPREPOptimizer(object):
                 x0 = x1
                 x1 = x2
                 x2 = R * x2 + C * x3
-
                 temp_trans = self.xopt - x2 * self.Gradient
                 fxt = self.metric.distance (temp_trans)
-
                 fx1 = fx2
                 fx2 = fxt
             else:
-
                 x3 = x2
                 x2 = x1
                 x1 = R * x1 + C * x0

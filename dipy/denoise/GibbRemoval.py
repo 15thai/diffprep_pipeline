@@ -4,16 +4,8 @@ import numpy as np
 import multiprocessing
 import ctypes, argparse
 from contextlib import closing
-import argparse
 from dipy.denoise.unring import  unring_2d
 
-
-# ### To run UnRing from the command line ###
-# parser = argparse.ArgumentParser(description= "python UnRing indir outdir")
-# parser.add_argument('indir', type = str, help = '/path/to/input/file')
-# parser.add_argument('outdir', type = str, help = '/path/to/output/file')
-# args = parser.parse_args()
-# #######################################################################
 
 def unring_wrapper(slices):
 
@@ -95,10 +87,6 @@ def gibbremoval(arr, nsh=25, minW=1, maxW=5, out_dtype=None, num_threads=None):
     if out_dtype is None:
         out_dtype = arr.dtype
 
-    # if  arr.ndim == 3:
-        # print('Converting input array from 3D to 4D...')
-        # arr = arr.reshape([arr.shape[0], arr.shape[1], arr.shape[2]])
-
     if arr.ndim == 2:
         return unring_2d(arr, nsh, minW, maxW)
 
@@ -131,13 +119,3 @@ def gibbremoval(arr, nsh=25, minW=1, maxW=5, out_dtype=None, num_threads=None):
     print("Gibbs ringing correction took --- %s seconds ---" % (time.time() - start_time))
 
     return shared_output.astype(out_dtype)
-
-
-if __name__ == "__main__":
-    image = nib.load(args.indir)
-    affine = image.affine
-    arr = image.get_data()
-    unrang_arr = gibbremoval(arr)
-    image_out = nib.Nifti1Image(unrang_arr, affine)
-    nib.save(image_out, args.outdir)
-    print("Done")

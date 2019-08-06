@@ -119,8 +119,7 @@ cdef inline int _cubic_interpolate3d(floating [:,:,:]volume, double ip, double j
         int tmp0, tmp1, tmp2,tmp3
     #with gil:
     #    print(ip,jp,kp, nx, ny, nz)
-    if (ip < 0 or ip > nx-2 or jp < 0 or jp > ny-2 or kp < 0 or kp > nz-2):
-
+    if (ip < 1 or ip > nx-2 or jp < 1 or jp > ny-2 or kp < 1 or kp > nz-2):
         out[0] = 0
         return 0
 
@@ -149,9 +148,7 @@ cdef inline int _cubic_interpolate3d(floating [:,:,:]volume, double ip, double j
     X_vector[2] = -0.5* X*(X+1)*(X-2)
     X_vector[3] = mult* X*(X-1)*(X+1)
 
-    #if (startX-2 < 0) or  (startY-2<0)  or (startZ-2 <0) or (startX + 1 > nx) or (startY + 1>ny) or (startZ + 1>nz):
-    #    with gil:
-    #        print(startX, startY, startZ)
+
     t_m1_m1 = Z_vector[0]*volume[startX-1, startY-1, startZ-1] + \
               Z_vector[1]*volume[startX-1, startY-1, startZ] + \
               Z_vector[2]*volume[startX-1, startY-1, startZ+1] + \

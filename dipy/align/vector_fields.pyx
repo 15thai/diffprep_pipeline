@@ -605,7 +605,6 @@ def interpolate_vector_3d(floating[:, :, :, :] field, double[:, :] locations):
                 locations[i, 0], locations[i, 1], locations[i, 2], &out[i, 0])
     return np.asarray(out), np.asarray(inside)
 
-
 cdef inline int _interpolate_vector_3d(floating[:, :, :, :] field, double dkk,
                                        double dii, double djj,
                                        floating* out) nogil:
