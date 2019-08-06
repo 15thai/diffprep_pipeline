@@ -6,6 +6,8 @@ import numpy as np
 import multiprocessing
 import ctypes, argparse
 from contextlib import closing
+import nibabel as nib
+
 def set_image_in_scale(lim_arr, fixed_image, moving_image):
     if lim_arr is None:
         fixed_min = fixed_image.min()
@@ -24,6 +26,17 @@ def set_image_in_scale(lim_arr, fixed_image, moving_image):
     moving_image[moving_image > moving_max] = moving_max
     moving_image[moving_image < moving_min] = moving_min
     return fixed_image, moving_image
+
+def get_angles_list (step = 45):
+    angles_list = []
+    for x in range(-180, 180, step):
+        for y in range(-180, 180, step):
+            for z in range(-180, 180, step):
+                mx = x / 180 * np.pi
+                my = y / 180 * np.pi
+                mz = z / 180 * np.pi
+                angles_list.append([mx, my, mz])
+    return angles_list
 
 def get_gradients_params (resolution, sizes, default = 21):
     sz = sizes
@@ -119,16 +132,8 @@ def register_images (target_arr, target_affine,
             ValueError("ERROR")
 
     if optimizer_setting:
-        print("optimizing")
-
-        angles_list = []
-        for x in range(-180, 180, 45):
-            for y in range(-180, 180, 45):
-                for z in range(-180, 180, 45):
-                    mx = x / 180 * np.pi
-                    my = y / 180 * np.pi
-                    mz = z / 180 * np.pi
-                    angles_list.append([mx, my, mz])
+        print("start optimizer")
+        angles_list = get_angles_list()
 
         flags2 = np.zeros(21)
         flags2[:6] = 1
@@ -160,7 +165,7 @@ def register_images (target_arr, target_affine,
         finalparams = best_params
 
     else:
-        print("not optimizing")
+        print("not using optimizer")
         initializeTransform.get_QuadraticParams()
         transformRegister = QuadraticRegistration(phase)
 
@@ -179,7 +184,6 @@ def register_images (target_arr, target_affine,
     return finalTransform
 
 def wrapper(vol):
-
     inp = np.frombuffer(shared_input)
     sh_input = inp.reshape(arr_shape)
 
@@ -203,4 +207,44 @@ def init(shared_input_, shared_output_, arr_shape_, params_):
     moving_affine = params_[1]
 
 
-# def run_pararllel()
+def run_pararllel(image_name, b0_target_name,  num_threads = None):
+    start_time = time.time()
+
+    if num_threads is not None:
+        threads_to_use = num_threads
+    else:
+        threads_to_use = multiprocessing.cpu_count()
+
+
+    image = nib.load(image_name)
+    image_size = 1
+    for i in image.shape:
+        image_size *=i
+
+    target_image = nib.load(b0_target_name)
+    target_arr = target_image.get_data()
+
+
+
+
+    mp_arr = multiprocessing.RawArray(ctypes.c_double, image.size)
+    shared_arr = np.frombuffer(mp_arr)
+    shared_input = shared_arr.reshape(image.shape)
+    shared_input[:] = image.get_data()[:]
+    # output array
+    mp_arr2 = multiprocessing.RawArray(ctypes.c_double, target_arr.size)
+    shared_arr2 = np.frombuffer(mp_arr2)
+    shared_output = shared_arr2.reshape(target_arr.shape)
+    # parameters
+    params = [image.affine, target_image.affine]
+
+    # multi-processing
+    with closing(multiprocessing.Pool(threads_to_use, initializer=init,
+                                      initargs=(shared_arr, shared_arr2, params))) as p:
+        p.map_async(wrapper, [slices for slices in range(0, image.shape[-1])])
+    p.join()
+
+    print("Gibbs ringing correction took --- %s seconds ---" % (time.time() - start_time))
+
+    return shared_output
+

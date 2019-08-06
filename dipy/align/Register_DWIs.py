@@ -247,7 +247,6 @@ def register_to_b0 (fixed_im_nib,
 
     if optimizer_setting:
         print("optimizing")
-
         angles_list =[]
         for x in range(-180, 180, 45):
             for y in range(-180, 180, 45):
