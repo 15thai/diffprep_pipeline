@@ -6,8 +6,12 @@ mask_fn = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/100408_LR_proc_mask_m
 
 
 test = difp.diffprep(input_image_fn= input_fn,
-                     phase_encoding= 'horizontal')
-test.activeEddy = True
+                     phase_encoding= 'horizontal',
+                     activeDenoising=False,
+                     activeGibbRemoving=False,
+                     activeChangeFOV=False,
+                     activeEddy= True)
+# test.activeEddy = True
 test.execute()
 print('AAAa')
 

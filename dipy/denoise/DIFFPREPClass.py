@@ -30,16 +30,15 @@ class diffprep(object):
         input_resolution = self.input_image.header.get_zooms()[:3]
         self.input_resolution = np.array(input_resolution)
         self.phase_encoding = phase_encoding
-
+        self.CreateMask = True
         if new_resolution:
             self.new_resolution = new_resolution
         # ------------------------------------------------------------------
-        if b0_mask_fn:
-            self.b0_mask_fn = b0_mask_fn
-            b0_mask_im = nib.load(b0_mask_fn)
-        if b0_image_fn:
-            self.b0_image_fn = b0_image_fn
-            b0_image = nib.load(b0_image_fn)
+        self.b0_mask_fn = b0_mask_fn
+        if self.b0_mask_fn:
+            self.CreateMask = False
+
+        self.b0_image_fn = b0_image_fn
 
         if output_image_path is None:
             output_image_path = input_image_fn.split('.')[0] + \
@@ -76,8 +75,7 @@ class diffprep(object):
 
 
 ########### GETTING SUB_FUNCTIONS ####################
-
-    def execute(self, target_id =0, moving_id = None, activeRegister = False):
+    def execute(self,activeRegister = False):
         self.current_data = self.input_image.get_data()
         self.current_affine = self.input_image.affine
         if self.activeChangeFOV and (len(self.fov) != 0):
@@ -109,20 +107,28 @@ class diffprep(object):
             temp_file = os.path.join(self.temp_wd, 'temp.nii')
             self.save_output_tofile(self.current_data,
                                     self.current_affine,temp_file)
-            print("----> Saving to temporary file for registration")
+            print("----> Saving to temporary corrected file for registration")
             print("----> saving ", temp_file)
 
 
-        # save b0_temp
+        # save b0_temp after correction
         temp_file = os.path.join(self.temp_wd, 'temp_b0.nii')
         self.save_output_tofile(self.current_data[...,self.b0_id],
                                 self.current_affine, temp_file)
         print("----> Saving to temporary file for registration")
         print("----> saving ", temp_file)
 
+
         # creating mask base on b0_temp
         temp_mask = temp_file.split('.nii')[0] + "_mask.nii"
-        sub_processes.creating_mask(temp_file, temp_mask)
+
+        if np.any(self.current_data[..., self.b0_id]) and (self.CreateMask):
+            sub_processes.creating_mask(temp_file, temp_mask)
+        else:
+            if self.b0_mask_fn:
+                temp_mask = self.b0_mask_fn.split('.nii')
+            else:
+                print("Invalid Image")
 
         if self.activeEddy:
             temp_mask_mask = temp_mask.split('.nii')[0] + "_mask.nii"
@@ -130,30 +136,28 @@ class diffprep(object):
             dmc_image, _ = sub_processes.dmc_make_target(temp_file,temp_mask_mask_image.get_data())
 
             temp_file = os.path.join(self.temp_wd, 'b0_DMC_target.nii')
-            self.save_output_tofile(self.current_data[..., self.b0_id],
+            self.save_output_tofile(dmc_image,
                                     self.current_affine, temp_file)
             print("----> Saving to temporary file for registration")
             print("----> saving ", temp_file)
 
             b0_target = nib.load(temp_file)
             if activeRegister:
-                import multiprocessing
-                from functools import partial
-                threads_to_use = multiprocessing.cpu_count()
-
-                parse_function = partial(self.multi_sub_,
-                                         b0_target=b0_target,
-                                         b0_target_bin=temp_mask_mask_image.get_data(),
-                                         correction_mode=False)
-
-                with multiprocessing.Pool(threads_to_use) as p:
-                    transform_vols = p.map(parse_function, [self.input_image.dataobj[..., i]
-                                                            for i in range(self.input_image.shape[-1])])
-                np.savetxt(transform_vols, os.path.join(self.temp_wd, 'log_1.txt'))
-                return transform_vols
-
-
-
+                # import multiprocessing
+                # from functools import partial
+                # threads_to_use = multiprocessing.cpu_count()
+                #
+                # parse_function = partial(self.multi_sub_,
+                #                          b0_target=b0_target,
+                #                          b0_target_bin=temp_mask_mask_image.get_data(),
+                #                          correction_mode=False)
+                #
+                # with multiprocessing.Pool(threads_to_use) as p:
+                #     transform_vols = p.map(parse_function, [self.input_image.dataobj[..., i]
+                #                                             for i in range(self.input_image.shape[-1])])
+                # np.savetxt(os.path.join(self.temp_wd,'log_1.txt'), transform_vols)
+                # return transform_vols
+                print("Nah Y_Y")
 
     def multi_sub_(self, curr_vol, b0_target, b0_target_bin, correction_mode = False):
         signal_ranges = sub_processes.choose_range(b0_target, curr_vol, b0_target_bin)

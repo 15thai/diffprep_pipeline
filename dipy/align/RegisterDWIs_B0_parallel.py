@@ -1,31 +1,11 @@
-import numpy as np
 from dipy.align.imwarp import get_direction_and_spacings
 from dipy.align.ImageQuadraticMap import QuadraticMap, QuadraticRegistration, transform_centers_of_mass
 import time
 import numpy as np
-import multiprocessing
-import ctypes, argparse
-from contextlib import closing
+import pymp
 import nibabel as nib
+from dipy.align import sub_processes
 
-def set_image_in_scale(lim_arr, fixed_image, moving_image):
-    if lim_arr is None:
-        fixed_min = fixed_image.min()
-        fixed_max = fixed_image.max()
-        moving_min = moving_image.min()
-        moving_max = moving_image.max()
-    else:
-        fixed_min = lim_arr[0]
-        fixed_max = lim_arr[1]
-        moving_min = lim_arr[2]
-        moving_max = lim_arr[3]
-    # Setting image boundaries
-    # where fixed_image > fixed_max , fixed_image =fixed_max
-    fixed_image[fixed_image > fixed_max] = fixed_max
-    fixed_image[fixed_image < fixed_min] = fixed_min
-    moving_image[moving_image > moving_max] = moving_max
-    moving_image[moving_image < moving_min] = moving_min
-    return fixed_image, moving_image
 
 def get_angles_list (step = 45):
     angles_list = []
@@ -38,37 +18,6 @@ def get_angles_list (step = 45):
                 angles_list.append([mx, my, mz])
     return angles_list
 
-def get_gradients_params (resolution, sizes, default = 21):
-    sz = sizes
-    grad_params = np.zeros(default)
-    grad_params[:3] = resolution[:3] * 1.25
-    grad_params[3:6] = 0.05
-    grad_params[6:9] = resolution[2] * 1.5 / (sz[:3] / 2 * resolution[:3]) * 2
-    grad_params[9] = 0.5 * resolution[2] * 10 / (sz[0] / 2 * resolution[0]) / (sz[1] / 2 * resolution[1])
-    grad_params[10] = 0.5 * resolution[2] * 10 / (sz[0] / 2 * resolution[0]) / (sz[2] / 2 * resolution[2])
-    grad_params[11] = 0.5 * resolution[2] * 10 / (sz[1] / 2 * resolution[0]) / (sz[2] / 2 * resolution[2])
-
-    grad_params[12] = resolution[2] * 5. / (sz[0] / 2. * resolution[0]) / (sz[0] / 2. * resolution[0])
-    grad_params[13] = resolution[2] * 8. / (sz[0] / 2. * resolution[0]) / (sz[0] / 2. * resolution[0]) / 2.
-
-    grad_params[14] = 5. * resolution[2] * 4 / (sz[0] / 2. * resolution[0]) / (sz[1] / 2. * resolution[1]) / (
-                sz[2] / 2. * resolution[2])
-
-    grad_params[15] = 5. * resolution[2] * 1 / (sz[0] / 2. * resolution[0]) / (sz[0] / 2. * resolution[0]) / (
-                sz[0] / 2. * resolution[0])
-    grad_params[16] = 5. * resolution[2] * 1. / (sz[1] / 2. * resolution[1]) / (sz[1] / 2. * resolution[1]) / (
-                sz[1] / 2. * resolution[1])
-    grad_params[17] = 5. * resolution[2] * 1. / (sz[0] / 2. * resolution[0]) / (sz[2] / 2. * resolution[2]) / (
-                sz[2] / 2. * resolution[2])
-    grad_params[18] = 5. * resolution[2] * 1. / (sz[1] / 2. * resolution[1]) / (sz[2] / 2. * resolution[2]) / (
-                sz[2] / 2. * resolution[2])
-    grad_params[19] = 5. * resolution[2] * 1. / (sz[0] / 2. * resolution[0]) / (sz[0] / 2. * resolution[0]) / (
-                sz[0] / 2. * resolution[0])
-    grad_params[20] = 5. * resolution[2] * 1. / (sz[0] / 2. * resolution[0]) / (sz[0] / 2. * resolution[0]) / (
-                sz[0] / 2. * resolution[0])
-    grad_params[:] = grad_params[:] / 1.5
-    return grad_params
-
 def register_images (target_arr, target_affine,
                      moving_arr, moving_affine,
                      phase,
@@ -76,7 +25,9 @@ def register_images (target_arr, target_affine,
                      registration_type='quadratic',
                      initialize=False,
                      optimizer_setting=False):
-    fixed_image, moving_image = set_image_in_scale(lim_arr, target_arr, moving_arr)
+    fixed_image, moving_image = sub_processes.set_images_in_scale(lim_arr,
+                                                                  target_arr,
+                                                                  moving_arr)
 
     sz = np.array(fixed_image.shape)
     moving_sz = np.array(moving_image.shape)
@@ -108,7 +59,7 @@ def register_images (target_arr, target_affine,
                                                         static_grid2world=fixed_grid2world,
                                                         moving_grid2world=moving_grid2world)
 
-    grad_scale = get_gradients_params(resolution, sz)
+    grad_scale = sub_processes.get_gradients_params(resolution, sz)
 
     if initialize and ~optimizer_setting:
         print("initializing")
@@ -161,7 +112,6 @@ def register_images (target_arr, target_affine,
                 best_reg_val = reg_val
                 best_params = dummy_transformMap.QuadraticParams
 
-        # finalTransform = best_map(phase, QuadraticParams= best_params)
         finalparams = best_params
 
     else:
@@ -179,72 +129,54 @@ def register_images (target_arr, target_affine,
 
     finalTransform = QuadraticMap(phase, finalparams, fixed_image.shape, fixed_grid2world,
                                   moving_image.shape, moving_grid2world)
-    final_image = finalTransform.transform(moving_image)
-
-    return finalTransform
-
-def wrapper(vol):
-    inp = np.frombuffer(shared_input)
-    sh_input = inp.reshape(arr_shape)
-
-    out = np.frombuffer(shared_output)
-    sh_out = out.reshape(arr_shape)
+    image_transform = finalTransform.transform(image = moving_arr,QuadraticParams=finalparams)
+    return finalparams,image_transform
 
 
-    for k in range(arr_shape[3]):
-        slice_data = sh_input[:, :,:, vol]
-        result_slice = register_images(slice_data, nsh, minW, maxW)
-        sh_out[:, :, :, vol] = result_slice
 
 
-def init(shared_input_, shared_output_, arr_shape_, params_):
-    # initialization of the global shared arrays
-    global shared_input, shared_output, arr_shape, nsh, minW, maxW
-    shared_input = shared_input_
-    shared_output = shared_output_
-    arr_shape = arr_shape_
-    target_affine = params_[0]
-    moving_affine = params_[1]
+def test ():
+    b0_target_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/process/temp_b0.nii"
+    moving_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/100408_LR_proc.nii"
+    mask_target_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/process/temp_b0_mask_mask.nii"
 
+    b0_target = nib.load(b0_target_image)
+    moving_image = nib.load(moving_image)
+    mask_target = nib.load(mask_target_image)
+    phase = 'vertical'
+    moving_image_shr = pymp.shared.array((moving_image.shape), dtype = np.float32)
+    moving_image_shr[:] = moving_image.get_data()
 
-def run_pararllel(image_name, b0_target_name,  num_threads = None):
+    b0_arr = b0_target.get_data()
+    mask_arr = mask_target.get_data()
+    lim_arr = pymp.shared.array((4, moving_image.shape[-1]), dtype=np.float32)
+
+    transformation = pymp.shared.array((moving_image.shape[-1],21), dtype=np.float64)
     start_time = time.time()
 
-    if num_threads is not None:
-        threads_to_use = num_threads
-    else:
-        threads_to_use = multiprocessing.cpu_count()
+    with pymp.Parallel() as p:
+        for index in p.range(1, moving_image.shape[-1]):
+            curr_vol = moving_image_shr[:, :, :, index]
+            lim_arr[:, index] = sub_processes.choose_range(b0_arr,
+                                                           curr_vol,
+                                                           mask_arr)
 
+    with pymp.Parallel() as p:
+        for index in p.range(1, moving_image.shape[-1]):
+            curr_vol = moving_image_shr[:, :, :, index]
 
-    image = nib.load(image_name)
-    image_size = 1
-    for i in image.shape:
-        image_size *=i
+            transformation[index,:],moving_image_shr[:,:,:,index] =  register_images(b0_arr, b0_target.affine,
+                                 curr_vol, moving_image.affine,
+                                 phase,
+                                lim_arr=lim_arr[:,index],
+                                registration_type='quadratic',
+                                initialize=False,
+                                optimizer_setting=False)
 
-    target_image = nib.load(b0_target_name)
-    target_arr = target_image.get_data()
+    print("Time cost {}", time.time() - start_time)
 
+    np.savetxt('transformations_test.txt', transformation)
+    image_out = nib.Nifti1Image(moving_image_shr, moving_image.affine)
+    nib.save(image_out, 'Image_test.nii')
 
-
-
-    mp_arr = multiprocessing.RawArray(ctypes.c_double, image.size)
-    shared_arr = np.frombuffer(mp_arr)
-    shared_input = shared_arr.reshape(image.shape)
-    shared_input[:] = image.get_data()[:]
-    # output array
-    mp_arr2 = multiprocessing.RawArray(ctypes.c_double, target_arr.size)
-    shared_arr2 = np.frombuffer(mp_arr2)
-    shared_output = shared_arr2.reshape(target_arr.shape)
-    # parameters
-    params = [image.affine, target_image.affine]
-
-    # multi-processing
-    with closing(multiprocessing.Pool(threads_to_use, initializer=init,
-                                      initargs=(shared_arr, shared_arr2, params))) as p:
-        p.map_async(wrapper, [slices for slices in range(0, image.shape[-1])])
-    p.join()
-
-    print("Gibbs ringing correction took --- %s seconds ---" % (time.time() - start_time))
-
-    return shared_output
-
+test()
