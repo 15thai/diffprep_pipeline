@@ -128,45 +128,45 @@ def unring_2d(data1, nsh =25, minW = 1, maxW = 3):
     return tmp2
 
 # Uncomment if you want to run in one processor
-# def unring_(arr, nsh=25, minW=1, maxW=3, out_dtype=None):
-#     start_time = time.time()
-#
-#     if out_dtype is None:
-#         out_dtype = arr.dtype
-#
-#     # We retain float64 precision, iff the input is in this precision:
-#     if arr.dtype == np.float64:
-#         calc_dtype = np.float64
-#     # Otherwise, we'll calculate things in float32 (saving memory)
-#     else:
-#         calc_dtype = np.float32
-#     arr = arr.astype(calc_dtype)
-#
-#     if arr.ndim > 4:
-#         raise ValueError("Invalid Dimension",
-#                          arr.shape)
-#
-#     unrang_arr = np.zeros(arr.shape, dtype=calc_dtype)
-#
-#     if arr.ndim == 3:
-#         for k in range(arr.shape[2]):
-#             slice_data = arr[:, :, k]
-#             result_slice = unring_2d(slice_data, nsh, minW, maxW)
-#             unrang_arr[:, :, k] = result_slice
-#
-#         print("--- %s seconds ---" % (time.time() - start_time))
-#         return unrang_arr.astype(out_dtype)
-#
-#
-#
-#     for vol in range(arr.shape[3]):
-#         for k in range(arr.shape[2]):
-#             slice_data = arr[:, :, k, vol]
-#             result_slice = unring_2d(slice_data, nsh, minW, maxW)
-#             unrang_arr[:, :, k, vol] = result_slice
-#
-#     print("--- %s seconds ---" % (time.time() - start_time))
-#     return unrang_arr.astype(out_dtype)
+def unring_(arr, nsh=25, minW=1, maxW=3, out_dtype=None):
+    start_time = time.time()
+
+    if out_dtype is None:
+        out_dtype = arr.dtype
+
+    # We retain float64 precision, iff the input is in this precision:
+    if arr.dtype == np.float64:
+        calc_dtype = np.float64
+    # Otherwise, we'll calculate things in float32 (saving memory)
+    else:
+        calc_dtype = np.float32
+    arr = arr.astype(calc_dtype)
+
+    if arr.ndim > 4:
+        raise ValueError("Invalid Dimension",
+                         arr.shape)
+
+    unrang_arr = np.zeros(arr.shape, dtype=calc_dtype)
+
+    if arr.ndim == 3:
+        for k in range(arr.shape[2]):
+            slice_data = arr[:, :, k]
+            result_slice = unring_2d(slice_data, nsh, minW, maxW)
+            unrang_arr[:, :, k] = result_slice
+
+        print("--- %s seconds ---" % (time.time() - start_time))
+        return unrang_arr.astype(out_dtype)
+
+
+
+    for vol in range(arr.shape[3]):
+        for k in range(arr.shape[2]):
+            slice_data = arr[:, :, k, vol]
+            result_slice = unring_2d(slice_data, nsh, minW, maxW)
+            unrang_arr[:, :, k, vol] = result_slice
+
+    print("--- %s seconds ---" % (time.time() - start_time))
+    return unrang_arr.astype(out_dtype)
 
 
 

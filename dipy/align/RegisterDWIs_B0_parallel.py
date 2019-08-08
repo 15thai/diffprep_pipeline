@@ -136,9 +136,9 @@ def register_images (target_arr, target_affine,
 
 
 def test ():
-    b0_target_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/process/temp_b0.nii"
-    moving_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/100408_LR_proc.nii"
-    mask_target_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/process/temp_b0_mask_mask.nii"
+    b0_target_image = "/home/anhpeo/Desktop/dipy_data_test/register_test/test_B/AP_b2500_b0.nii"
+    moving_image = "/home/anhpeo/Desktop/dipy_data_test/register_test/AP_b2500.nii"
+    mask_target_image = "/home/anhpeo/Desktop/dipy_data_test/register_test/test_B/AP_b2500_b0_fsl_mask_mask.nii"
 
     b0_target = nib.load(b0_target_image)
     moving_image = nib.load(moving_image)
