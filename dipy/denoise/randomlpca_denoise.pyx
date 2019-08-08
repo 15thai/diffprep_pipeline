@@ -103,19 +103,19 @@ cpdef int fast_eig(double[:,::1] a, double[::1] W, double[::1] WORK, int LWORK, 
         output:        IWORK     : return the optimal LIWORK
     """
     cdef:
-        char JOBA='D'
-        char JOBZ='V'
-        char UPLO='U'
-        int incx=1
+        char JOBA = 'D'
+        char JOBZ = 'V'
+        char UPLO = 'U'
+        int incx = 1
         int N = a.shape[0]
-        double *a0=&a[0,0]
-        double *w0=&W[0]
-        double *work0=&WORK[0]
-        int *iwork0=&IWORK[0]
+        double *a0 = &a[0,0]
+        double *w0 = &W[0]
+        double *work0 = &WORK[0]
+        int *iwork0 = &IWORK[0]
 
-        int lda=N
-        int lw=LWORK
-        int liw= LIWORK
+        int lda = N
+        int lw = LWORK
+        int liw = LIWORK
         int info
 
     # Output compute is in Ascending Order
@@ -148,7 +148,7 @@ cpdef int fast_dgemm(double[:,::1] a, double[:,::1] c) nogil except -1:
 
     m2= a.shape[0]
     n2= a.shape[1]
-    if m2 <= n2:           #a*a.T
+    if m2 <= n2:           # XXt
         transa='t'
         transb='n'
         m=m2
@@ -156,7 +156,7 @@ cpdef int fast_dgemm(double[:,::1] a, double[:,::1] c) nogil except -1:
         k=n2
         dgemm(&transa, &transb, &m , &n, &k, &alpha, a0, &k, a0,
                &k, &beta, c0, &m)
-    else:                # a.T*a
+    else:                # XtX
         transa='n'
         transb='t'
         m=n2

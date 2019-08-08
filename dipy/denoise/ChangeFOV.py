@@ -1,6 +1,5 @@
-import sys
+import sys, os
 import nibabel as nib
-import os
 from scipy.ndimage import center_of_mass
 from dipy.align.imwarp import get_direction_and_spacings
 import numpy as np
@@ -208,6 +207,8 @@ def changeFoV(image_nib, new_FOV, com = False):
             raise IOError("list of fields of view")
 
     image_shape = np.array(image_nib.shape)
+    if image_shape.shape[0] > 3:
+        image_shape = image_shape[:-1]
     direction, spacing = get_direction_and_spacings(image_nib.affine, image_nib.ndim)
     old_fov = image_shape * spacing
 
