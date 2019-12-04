@@ -2,7 +2,9 @@ from dipy.align.imwarp import get_direction_and_spacings
 from dipy.align.ImageQuadraticMap import QuadraticMap, QuadraticRegistration, transform_centers_of_mass
 import time
 import numpy as np
-import pymp
+import multiprocessing
+import ctypes, argparse
+from contextlib import closing
 import nibabel as nib
 from dipy.align import sub_processes
 
@@ -129,55 +131,101 @@ def register_images (target_arr, target_affine,
 
     finalTransform = QuadraticMap(phase, finalparams, fixed_image.shape, fixed_grid2world,
                                   moving_image.shape, moving_grid2world)
-    image_transform = finalTransform.transform(image = moving_arr,QuadraticParams=finalparams)
-    return finalparams,image_transform
 
+    return finalTransform
+
+def wrapper(vol):
+    inp = np.frombuffer(shared_input)
+    sh_input = inp.reshape(arr_shape)
+
+    out = np.frombuffer(shared_output)
+    sh_out = out.reshape(arr_shape)
+
+
+    moving_arr = sh_input[:, :,:, vol]
+    result_slice = register_images(sh_out,
+                                   target_affine,
+                                   moving_arr,
+                                   moving_affine,
+                                   phase)
+    sh_input[:, :, :, vol] = result_slice
+
+
+def init(shared_input_,
+         shared_output_,
+         arr_shape_,
+         params_):
+    # initialization of the global shared arrays
+    global shared_input
+    global shared_output
+    global arr_shape
+    global target_affine
+    global moving_affine
+    global phase
+    shared_input = shared_input_
+    shared_output = shared_output_
+    arr_shape = arr_shape_
+    target_affine = params_[0]
+    moving_affine = params_[1]
+    phase = params_[2]
+
+def run_pararllel(image_name,
+                  b0_target_name,
+                  b0_id = 0,
+                  phase = 'vertical',
+                  num_threads = None):
+    start_time = time.time()
+
+    if num_threads is not None:
+        threads_to_use = num_threads
+    else:
+        threads_to_use = multiprocessing.cpu_count()
+
+    image = nib.load(image_name)
+    image_size = 1
+    for i in image.shape:
+        image_size *=i
+
+    target_image = nib.load(b0_target_name)
+    target_arr = target_image.get_data()
+
+    if len(image.shape) > 3:
+        if image.shape[:-1] != target_arr.shape:
+            raise IOError ("Two images are not in the same dimensions")
+    else:
+        if image.shape != target_arr.shape:
+            raise IOError ("Two images are not in the same dimensions")
+
+    mp_arr = multiprocessing.RawArray(ctypes.c_double, image_size)
+    shared_arr = np.frombuffer(mp_arr)
+    shared_input = shared_arr.reshape(image.shape)
+    shared_input[:] = image.get_data()[:]
+    # output array
+    mp_arr2 = multiprocessing.RawArray(ctypes.c_double, target_arr.size)
+    shared_arr2 = np.frombuffer(mp_arr2)
+    shared_output = shared_arr2.reshape(target_arr.shape)
+    shared_output[:] = target_arr[:]
+    # parameters
+    params = [image.affine, target_image.affine, phase]
+
+    # multi-processing
+    with closing(multiprocessing.Pool(threads_to_use, initializer=init,
+                                      initargs=(shared_arr, shared_arr2, params))) as p:
+        p.map_async(wrapper, [vol for vol in range(0, image.shape[-1]) if vol != b0_id])
+    p.join()
+
+    print("Gibbs multi correction took --- %s seconds ---" % (time.time() - start_time))
+
+    return shared_input, image.affine
 
 
 
 def test ():
     b0_target_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/process/temp_b0.nii"
     moving_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/100408_LR_proc.nii"
-    mask_target_image = "/qmi_home/anht/Desktop/DIFFPREP_test_data/test2/process/temp_b0_mask_mask.nii"
+    output, affine = run_pararllel(moving_image, b0_target_image)
+    out_test = nib.Nifti1Image(output, affine )
+    nib.save(out_test, moving_image.split('.nii') + '_out_Test.nii')
 
-    b0_target = nib.load(b0_target_image)
-    moving_image = nib.load(moving_image)
-    mask_target = nib.load(mask_target_image)
-    phase = 'vertical'
-    moving_image_shr = pymp.shared.array((moving_image.shape), dtype = np.float32)
-    moving_image_shr[:] = moving_image.get_data()
-
-    b0_arr = b0_target.get_data()
-    mask_arr = mask_target.get_data()
-    lim_arr = pymp.shared.array((4, moving_image.shape[-1]), dtype=np.float32)
-
-    transformation = pymp.shared.array((moving_image.shape[-1],21), dtype=np.float64)
-    start_time = time.time()
-
-    with pymp.Parallel() as p:
-        for index in p.range(1, moving_image.shape[-1]):
-            curr_vol = moving_image_shr[:, :, :, index]
-            lim_arr[:, index] = sub_processes.choose_range(b0_arr,
-                                                           curr_vol,
-                                                           mask_arr)
-
-    with pymp.Parallel() as p:
-        for index in p.range(1, moving_image.shape[-1]):
-            curr_vol = moving_image_shr[:, :, :, index]
-
-            transformation[index,:],moving_image_shr[:,:,:,index] =  register_images(b0_arr, b0_target.affine,
-                                 curr_vol, moving_image.affine,
-                                 phase,
-                                lim_arr=lim_arr[:,index],
-                                registration_type='quadratic',
-                                initialize=False,
-                                optimizer_setting=False)
-
-    print("Time cost {}", time.time() - start_time)
-
-    np.savetxt('transformations_test.txt', transformation)
-    image_out = nib.Nifti1Image(moving_image_shr, moving_image.affine)
-    image_out_fn = moving_image.split(".nii")[0] + "_image_eddy_test.nii"
-    nib.save(image_out, 'Image_test.nii')
 
 test()

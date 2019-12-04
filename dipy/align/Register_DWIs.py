@@ -1,4 +1,3 @@
-# Authors: Okan, Anh Thai, Britney
 import numpy as np
 from dipy.align.imwarp import get_direction_and_spacings
 import nibabel as nib
